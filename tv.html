@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Câmaras Frias — Painel TV</title>
+<style>
+  :root {
+    --bg:#0c1622; --header-bg:#0f2035; --border:#27425e;
+    --green-bg:#163a25; --green-b:#28a745; --green-t:#7be79e;
+    --red-bg:#3a1418;   --red-b:#dc3545;   --red-t:#ff9da5;
+    --yel-bg:#3a2f0a;   --yel-b:#ffc107;   --yel-t:#ffe27a;
+    --mono:monospace;
+    --cond:sans-serif;
+  }
+  html,body{height:100%}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:#fff;font-family:var(--cond);height:100vh;overflow:hidden;
+    display:flex;flex-direction:column}
+
+  header{background:var(--header-bg);padding:10px 28px;display:flex;align-items:center;
+    justify-content:space-between;border-bottom:3px solid var(--border);flex:0 0 auto}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-icon{font-size:28px}
+  .logo-text strong{display:block;font-size:20px;letter-spacing:1px;font-weight:900}
+  .logo-text span{font-size:11px;color:#7fa3c2;letter-spacing:2px}
+
+  .stats{display:flex;gap:10px}
+  .pill{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;
+    padding:4px 14px;text-align:center;font-family:var(--mono)}
+  .pill strong{display:block;font-size:20px;line-height:1.1}
+  .pill span{font-size:9px;letter-spacing:1px;color:#9fb8cf}
+  .pill.green strong{color:#5ddb8c}
+  .pill.red strong{color:#ff7070}
+  .pill.yellow strong{color:#ffd740}
+
+  .aba-title{text-align:center;padding:6px 0 2px;font-size:22px;font-weight:900;
+    letter-spacing:2px;color:#cfe3f5;flex:0 0 auto}
+  .aba-dots{display:flex;justify-content:center;gap:8px;padding-bottom:5px;flex:0 0 auto}
+  .dot{width:7px;height:7px;border-radius:50%;background:#27425e;transition:background .3s}
+  .dot.active{background:#5ddb8c}
+
+  .grid-wrap{padding:4px 20px 10px;flex:1 1 auto;min-height:0;display:flex}
+  table{border-collapse:collapse;width:100%;table-layout:fixed;height:100%}
+  thead{display:table-header-group}
+  th{font-size:12px;letter-spacing:1px;color:#9fb8cf;padding:3px;text-transform:uppercase;font-weight:700}
+  td{border:1px solid var(--border);padding:0}
+  td.vaga-num{width:60px;background:var(--header-bg);text-align:center;
+    font-family:var(--mono);font-size:20px;font-weight:700;color:#fff}
+  td.sep-left{border-left:4px solid #3a5d80}
+
+  .cell{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:1px;text-align:center;padding:2px;overflow:hidden}
+  .cell.livre{background:var(--green-bg);color:var(--green-t)}
+  .cell.ocupado{background:var(--red-bg);color:var(--red-t)}
+  .cell.reservado{background:var(--yel-bg);color:var(--yel-t)}
+  .cell-produto{font-size:12px;font-weight:700;line-height:1.1}
+  .cell-sub{font-family:var(--mono);font-size:9px;opacity:.8}
+  .cell-empty{font-size:10px;letter-spacing:1px;opacity:.5}
+
+  #sync-badge{position:fixed;bottom:6px;right:18px;font-family:var(--mono);font-size:11px;
+    display:flex;align-items:center;gap:6px;color:#9fb8cf}
+  #sync-dot{width:9px;height:9px;border-radius:50%;background:#ffd740}
+  #clock{position:fixed;bottom:6px;left:18px;font-family:var(--mono);font-size:11px;color:#9fb8cf}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🧊</div>
+    <div class="logo-text"><strong>CÂMARAS FRIAS</strong><span>PAINEL DE PALETES — TEMPO REAL</span></div>
+  </div>
+  <div class="stats">
+    <div class="pill"><strong id="cnt-total">0</strong><span>VAGAS</span></div>
+    <div class="pill red"><strong id="cnt-ocupado">0</strong><span>OCUPADO</span></div>
+    <div class="pill green"><strong id="cnt-livre">0</strong><span>LIVRE</span></div>
+    <div class="pill yellow"><strong id="cnt-reservado">0</strong><span>RESERVADO</span></div>
+  </div>
+</header>
+
+<div class="aba-title" id="aba-title">—</div>
+<div class="aba-dots" id="aba-dots"></div>
+
+<div class="grid-wrap" id="grid-wrap"></div>
+
+<div id="sync-badge"><span id="sync-dot"></span><span id="sync-text">conectando...</span></div>
+<div id="clock">--:--:--</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBjoW67L-k-co6FvwY7Dj1FtrVkKfDFeOk",
+  authDomain: "cacique-camara-fria.firebaseapp.com",
+  databaseURL: "https://cacique-camara-fria-default-rtdb.firebaseio.com",
+  projectId: "cacique-camara-fria",
+  storageBucket: "cacique-camara-fria.firebasestorage.app",
+  messagingSenderId: "721964494083",
+  appId: "1:721964494083:web:bc76ed0e5e6b9a4f224d36"
+};
+firebase.initializeApp(firebaseConfig);
+const dbRef = firebase.database().ref('paletes_v1');
+
+// ── CONFIG (igual ao app principal) ──────────────────────────────
+const VAGAS = 14;
+const ABAS_ORDER = ['CF1-LE','CF1-LD','CF2-LE','CF2-LD','FEFO'];
+const ABAS = {
+  'CF1-LE': { label: 'CÂMARA 1 — LADO ESQUERDO' },
+  'CF1-LD': { label: 'CÂMARA 1 — LADO DIREITO'  },
+  'CF2-LE': { label: 'CÂMARA 2 — LADO ESQUERDO' },
+  'CF2-LD': { label: 'CÂMARA 2 — LADO DIREITO'  },
+};
+const POSITIONS = [
+  { id:'P1F', label:'Frente 1' },
+  { id:'P1U', label:'Fundo 1'  },
+  { id:'P2F', label:'Frente 2' },
+  { id:'P2U', label:'Fundo 2'  },
+];
+function makeKey(aba, vaga, pos) {
+  return `${aba}_V${String(vaga).padStart(2,'0')}_${pos}`;
+}
+
+const SECONDS_PER_ABA = 12; // tempo de cada câmara na tela
+let data = {};
+let abaIdx = 0;
+
+// dots
+const dotsWrap = document.getElementById('aba-dots');
+ABAS_ORDER.forEach(() => {
+  const d = document.createElement('div');
+  d.className = 'dot';
+  dotsWrap.appendChild(d);
+});
+
+function buildGrid() {
+  const aba = ABAS_ORDER[abaIdx];
+  [...dotsWrap.children].forEach((d,i) => d.classList.toggle('active', i === abaIdx));
+  if (aba === 'FEFO') { buildFefoTV(); return; }
+  document.getElementById('aba-title').textContent = ABAS[aba].label;
+
+  const wrap = document.getElementById('grid-wrap');
+  wrap.innerHTML = '';
+  const table = document.createElement('table');
+  table.innerHTML = `<thead><tr>
+      <th style="width:90px">VAGA</th><th>POSIÇÃO 1 — FRENTE</th><th>POSIÇÃO 1 — FUNDO</th>
+      <th>POSIÇÃO 2 — FRENTE</th><th>POSIÇÃO 2 — FUNDO</th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+
+  for (let v = 1; v <= VAGAS; v++) {
+    const tr = document.createElement('tr');
+    const tdNum = document.createElement('td');
+    tdNum.className = 'vaga-num';
+    tdNum.textContent = v;
+    tr.appendChild(tdNum);
+
+    POSITIONS.forEach((pos, idx) => {
+      const k = makeKey(aba, v, pos.id);
+      const p = data[k] || { status: 'livre' };
+      const td = document.createElement('td');
+      if (idx === 2) td.className = 'sep-left';
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + p.status;
+      if (p.status === 'livre') {
+        cell.innerHTML = `<span class="cell-empty">LIVRE</span>`;
+      } else {
+        cell.innerHTML = `
+          <span class="cell-produto">${p.produto || '—'}</span>
+          ${p.qtd ? `<span class="cell-sub">${p.qtd}</span>` : ''}
+          ${p.fornecedor ? `<span class="cell-sub" style="opacity:.65">${p.fornecedor}</span>` : ''}`;
+      }
+      td.appendChild(cell);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  updateStats();
+}
+
+function updateStats() {
+  let total = 0, ocup = 0, resv = 0;
+  const CAMARAS = ABAS_ORDER.filter(a => a !== 'FEFO');
+  CAMARAS.forEach(aba => {
+    for (let v = 1; v <= VAGAS; v++) {
+      POSITIONS.forEach(pos => {
+        total++;
+        const s = (data[makeKey(aba, v, pos.id)] || {}).status;
+        if (s === 'ocupado') ocup++;
+        else if (s === 'reservado') resv++;
+      });
+    }
+  });
+  document.getElementById('cnt-total').textContent = total;
+  document.getElementById('cnt-ocupado').textContent = ocup;
+  document.getElementById('cnt-reservado').textContent = resv;
+  document.getElementById('cnt-livre').textContent = total - ocup - resv;
+}
+
+function buildFefoTV() {
+  document.getElementById('aba-title').textContent = '⏳ FEFO — ORDEM DE SAÍDA';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const items = [];
+  Object.entries(data).forEach(([key, p]) => {
+    if (!p || p.status === 'livre' || !p.entrada) return;
+    const parts = key.split('_');
+    const aba = parts[0], vagaStr = parts[1], pos = parts[2];
+    const vaga = parseInt(vagaStr.replace('V',''));
+    const posLabel = POSITIONS.find(x => x.id === pos)?.label || pos;
+    const ent = new Date(p.entrada + 'T00:00:00');
+    const dias = Math.floor((today - ent) / 86400000);
+    items.push({ key, aba, vaga, posLabel, p, dias });
+  });
+  items.sort((a,b) => b.dias - a.dias);
+  const top = items.slice(0, 14); // mostra até 14 na TV
+
+  const wrap = document.getElementById('grid-wrap');
+  wrap.innerHTML = '';
+  if (!top.length) {
+    wrap.innerHTML = '<div style="text-align:center;margin-top:60px;color:#7fa3c2;font-size:22px;letter-spacing:2px">Nenhum palete com data de entrada cadastrada.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.style.cssText = 'width:100%;border-collapse:collapse;table-layout:fixed;height:100%';
+  table.innerHTML = `<thead><tr style="background:#0f2035">
+    <th style="width:50px;font-size:12px;color:#9fb8cf;padding:6px;letter-spacing:1px">#</th>
+    <th style="font-size:12px;color:#9fb8cf;padding:6px;letter-spacing:1px;text-align:left">PRODUTO</th>
+    <th style="font-size:12px;color:#9fb8cf;padding:6px;letter-spacing:1px;text-align:left">LOCAL</th>
+    <th style="font-size:12px;color:#9fb8cf;padding:6px;letter-spacing:1px;text-align:left">FORNECEDOR</th>
+    <th style="width:130px;font-size:12px;color:#9fb8cf;padding:6px;letter-spacing:1px">DIAS NA CÂMARA</th>
+  </tr></thead>
+  <tbody>${top.map((it,i) => {
+    const cor = it.dias >= 10 ? '#ff7070' : it.dias >= 5 ? '#ffd740' : '#5ddb8c';
+    const bg  = it.dias >= 10 ? 'rgba(255,112,112,.08)' : it.dias >= 5 ? 'rgba(255,215,64,.06)' : 'rgba(93,219,140,.05)';
+    return `<tr style="background:${bg};border-bottom:1px solid #1a2e42">
+      <td style="text-align:center;font-family:var(--mono);font-size:20px;font-weight:700;color:${cor}">${i+1}</td>
+      <td style="font-size:15px;font-weight:700;padding:6px 10px">${it.p.produto || '—'}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:#7fa3c2;padding:6px 10px">${it.aba} · V${String(it.vaga).padStart(2,'0')} · ${it.posLabel}</td>
+      <td style="font-size:12px;color:#ccc;padding:6px 10px">${it.p.fornecedor || '—'}</td>
+      <td style="text-align:center;font-size:22px;font-weight:700;font-family:var(--mono);color:${cor}">${it.dias}d</td>
+    </tr>`;
+  }).join('')}</tbody>`;
+  wrap.appendChild(table);
+  updateStats();
+}
+
+// tempo real
+dbRef.on('value', (snap) => {
+  data = snap.val() || {};
+  buildGrid();
+});
+firebase.database().ref('.info/connected').on('value', (snap) => {
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-text');
+  const ok = snap.val() === true;
+  dot.style.background = ok ? '#5ddb8c' : '#ff7070';
+  txt.textContent = ok ? 'sincronizado' : 'offline';
+});
+
+// alternância automática
+setInterval(() => {
+  abaIdx = (abaIdx + 1) % ABAS_ORDER.length;
+  buildGrid();
+}, SECONDS_PER_ABA * 1000);
+
+// relógio
+function tickClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+buildGrid();
+</script>
+</body>
+</html>
