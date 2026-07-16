@@ -208,7 +208,8 @@ function buildFefoTV() {
     const parts = key.split('_');
     const aba = parts[0], vagaStr = parts[1], pos = parts[2];
     const vaga = parseInt(vagaStr.replace('V',''));
-    const posLabel = POSITIONS.find(x => x.id === pos)?.label || pos;
+    const posObj = POSITIONS.find(x => x.id === pos);
+const posLabel = posObj ? posObj.label : pos;
     const ent = new Date(p.entrada + 'T00:00:00');
     const dias = Math.floor((today - ent) / 86400000);
     items.push({ key, aba, vaga, posLabel, p, dias });
